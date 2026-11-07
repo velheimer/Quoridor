@@ -1,0 +1,37 @@
+name: Test and open a review
+on:
+  push:
+    branches: ['feat/**', 'fix/**', 'chore/**']
+
+concurrency:
+  group: review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: node --check app.js && node --test tests/*.test.js
+
+  open-pr:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      HEAD_BRANCH: ${{ github.ref_name }}
+    steps:
+      - name: Open PR if needed
+        run: |
+          existing=$(gh pr list --base main --head "$HEAD_BRANCH" --state open --json number --jq 'length')
+          if [ "$existing" = 0 ]; then
+            gh pr create --base main --head "$HEAD_BRANCH" --title "綾路 · $HEAD_BRANCH" --body "構文チェックとゲームルールのテストに合格しました。レビューをお願いします。"
+          fi
