@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>綾路 — AYAJI</title><link rel="stylesheet" href="style.css"><script defer src="rules.js"></script><script defer src="app.js"></script></head>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>綾路 — AYAJI</title><link rel="stylesheet" href="style.css"><script defer src="rules.js"></script><script defer src="ai.js"></script><script defer src="app.js"></script></head>
 <body><header><div class="brand"><span class="mark" aria-hidden="true">〣</span> AYAJI</div><button id="help">遊び方 ↗</button></header>
 <main><div class="heading"><div><small>ふたりの盤上遊戯</small><h1>綾路<span>あやじ</span></h1></div><div class="headingActions"><button id="undo">↶ 一手戻す</button><button id="restart">↺ はじめから</button></div></div>
 <div class="layout"><section class="frame" aria-label="対局盤"><div class="edge">朱の到達辺</div><div id="board"></div><div class="edge">藍の到達辺</div></section>
-<aside><section id="online"><button id="createRoom">オンライン対戦</button>
+<aside><label id="opponent"><small>対戦相手</small><select id="cpu"><option value="">ふたりで対戦</option><option value="easy">CPU · かんたん</option><option value="normal">CPU · ふつう</option><option value="hard">CPU · むずかしい</option></select></label><section id="online"><button id="createRoom">オンライン対戦</button>
 <p id="roomStatus" aria-live="polite"></p>
 <div id="roomTools" hidden><input id="invite" aria-label="招待リンク" readonly><button id="copyInvite">招待リンクをコピー</button><button id="leaveRoom">部屋を出る</button></div>
 </section><small>対局状況</small><h2 id="status" aria-live="polite"></h2><div id="count"></div><hr><small>残りの壁</small><div id="stock"></div><hr><small>この手の操作</small><div class="actions"><button data-mode="move">◇　駒を進める</button><button data-mode="h">━　横壁を置く</button><button data-mode="v">┃　縦壁を置く</button></div><p id="hint" aria-live="polite"></p></aside></div></main>

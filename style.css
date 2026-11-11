@@ -6,3 +6,5 @@
 #invite { width: 100%; min-width: 0; font: inherit; }
 .headingActions { display: flex; gap: .5rem; }
 #undo:disabled { opacity: .45; cursor: default; }
+#opponent { display: grid; gap: .3rem; margin-bottom: 1rem; }
+#cpu { font: inherit; color: inherit; padding: 7px 10px; border: 1px solid #bfb8aa; border-radius: 4px; background: transparent; }

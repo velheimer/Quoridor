@@ -32,20 +32,25 @@ const Ayaji = (() => {
     return result;
   }
 
-  function reachable(s,walls,player) {
+  // Shortest route to the goal edge ignoring the other pawn, from the pawn to the goal; null if sealed.
+  function path(s,player,walls = s.walls) {
     const queue = [s.pieces[player]];
-    const seen = new Set([queue[0].join(',')]);
+    const from = new Map([[queue[0].join(','),null]]);
     for (let i=0;i<queue.length;i++) {
       const [r,c] = queue[i];
-      if (r === goal(player)) return true;
+      if (r === goal(player)) {
+        const route = [];
+        for (let p = queue[i]; p; p = from.get(p.join(','))) route.unshift(p);
+        return route;
+      }
       for (const [dr,dc] of directions) {
         const next = [r+dr,c+dc], key = next.join(',');
-        if (!seen.has(key) && open(walls,[r,c],next)) {
-          seen.add(key); queue.push(next);
+        if (!from.has(key) && open(walls,[r,c],next)) {
+          from.set(key,queue[i]); queue.push(next);
         }
       }
     }
-    return false;
+    return null;
   }
 
   function move(s,r,c) {
@@ -63,11 +68,11 @@ const Ayaji = (() => {
     if (s.walls.some(w => (w.r===r && w.c===c) || (d===w.d &&
         (d==='h' ? w.r===r && Math.abs(w.c-c)<2 : w.c===c && Math.abs(w.r-r)<2)))) return false;
     const walls = [...s.walls,{r,c,d}];
-    if (![0,1].every(player => reachable(s,walls,player))) return false;
+    if (![0,1].every(player => path(s,player,walls))) return false;
     s.walls = walls;
     s.stock[s.turn]--; s.moves++; s.turn = 1-s.turn;
     return true;
   }
-  return {start,targets,move,wall};
+  return {start,targets,move,wall,path};
 })();
 if (typeof module !== 'undefined') module.exports = Ayaji;

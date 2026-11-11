@@ -2,11 +2,13 @@ const $ = id => document.getElementById(id);
 const names = ['朱','藍'];
 const colors = ['red','blue'];
 const pitch = 100/8.86, tile = pitch*.86;
-let state = Ayaji.start(), mode = 'move', undoStack = [];
+let state = Ayaji.start(), mode = 'move', undoStack = [], cpu = '';
+const who = i => names[i] + (cpu && i === 1 ? '（CPU）' : '');
+const cpuThinking = () => Boolean(cpu) && state.turn === 1 && state.winner === null;
 
 let room = null, pending = false, polling;
 function canPlay() {
-  return !room || (room.ready && room.seat === state.turn && !pending);
+  return room ? room.ready && room.seat === state.turn && !pending : !cpuThinking();
 }
 
 function position(el,x,y,w,h) {
@@ -15,7 +17,7 @@ function position(el,x,y,w,h) {
 function render() {
   const board = $('board'), legal = Ayaji.targets(state), over = state.winner !== null;
   board.replaceChildren();
-  $('status').textContent = over ? names[state.winner]+'の勝ち' : names[state.turn]+'の手番';
+  $('status').textContent = over ? who(state.winner)+'の勝ち' : who(state.turn)+'の手番';
   $('count').textContent = over ? state.moves+' 手で終局' : '第 '+(state.moves+1)+' 手';
   if (room) $('restart').hidden = !over || !room.ready;
   $('undo').hidden = Boolean(room);
@@ -25,7 +27,7 @@ function render() {
     btn.disabled = !canPlay() || over || (btn.dataset.mode !== 'move' && !state.stock[state.turn]);
     btn.setAttribute('aria-pressed',btn.dataset.mode===mode);
   }
-  $('hint').textContent = over ? '「はじめから」で再戦できます。' : mode==='move' ? '点のあるマスを選ぶと駒が進みます。' : '壁の中心にする交点を選んでください。';
+  $('hint').textContent = over ? '「はじめから」で再戦できます。' : cpuThinking() ? 'CPU が考えています…' : mode==='move' ? '点のあるマスを選ぶと駒が進みます。' : '壁の中心にする交点を選んでください。';
   for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
     const el = document.createElement('button');
     const target = canPlay() && mode==='move' && legal.some(p => p[0]===r && p[1]===c);
@@ -65,7 +67,7 @@ function dialog(title,body,confirm) {
   $('close').textContent = confirm ? '続ける' : '閉じる';
   $('dialog').showModal();
 }
-$('help').onclick = () => dialog('遊び方','<p>向かいの辺を目指します。朱が先手。先に向こう岸のどのマスにでも着いた方が勝ちです。</p><p>自分の手番では、駒を上下左右に1マス進めるか、長さ2マスの壁を1枚置きます。相手が隣なら飛び越えられます。相手の背後が壁か盤の端なら、相手の横に回り込めます。</p><p>壁は各自10枚。壁を重ねたり交差させたり、どちらかの道をすべて塞いだりすることはできません。</p>',false);
+$('help').onclick = () => dialog('遊び方','<p>向かいの辺を目指します。朱が先手。先に向こう岸のどのマスにでも着いた方が勝ちです。</p><p>自分の手番では、駒を上下左右に1マス進めるか、長さ2マスの壁を1枚置きます。相手が隣なら飛び越えられます。相手の背後が壁か盤の端なら、相手の横に回り込めます。</p><p>壁は各自10枚。壁を重ねたり交差させたり、どちらかの道をすべて塞いだりすることはできません。</p><p>「対戦相手」で CPU を選ぶと、あなたが朱（先手）、CPU が藍を持ちます。</p>',false);
 $('restart').onclick = () => dialog('新しい対局', room ? '<p>盤面をリセットして、朱の手番から再戦します。相手の盤面も新しくなります。</p>' : '<p>現在の盤面をリセットして、朱の手番から始めます。</p>',true);
 $('close').onclick = () => $('dialog').close();
 $('confirm').onclick = () => {
@@ -73,7 +75,21 @@ $('confirm').onclick = () => {
   if (room) return sendRoom('restart');
   state=Ayaji.start(); undoStack=[]; mode='move'; render();
 };
+// Only the player's moves are stacked, so one undo also takes back the CPU's reply.
 $('undo').onclick = () => { if (undoStack.length) { state = undoStack.pop(); mode = 'move'; render(); } };
+$('cpu').onchange = () => { cpu = $('cpu').value; state = Ayaji.start(); undoStack = []; mode = 'move'; render(); };
+
+function cpuTurn() {
+  if (!cpuThinking()) return;
+  const before = state;
+  setTimeout(() => {
+    // Skip if the board changed meanwhile (undo, restart or a new opponent).
+    if (state !== before) return;
+    const a = AyajiAI.choose(state,cpu), next = structuredClone(state);
+    if (a && (a.kind === 'move' ? Ayaji.move(next,a.r,a.c) : Ayaji.wall(next,a.r,a.c,a.kind))) state = next;
+    render();
+  }, 450);
+}
 render();
 
 async function requestRoom(action, fields = {}) {
@@ -121,7 +137,7 @@ async function play(kind, r, c) {
   const trial = structuredClone(state);
   const legal = kind === 'move' ? Ayaji.move(trial,r,c) : Ayaji.wall(trial,r,c,kind);
   if (!legal) { $('hint').textContent = 'ここには置けません。壁とゴールへの道を確認してください。'; return; }
-  if (!room) { undoStack.push(state); state = trial; mode = 'move'; render(); return; }
+  if (!room) { undoStack.push(state); state = trial; mode = 'move'; render(); cpuTurn(); return; }
   await sendRoom('play', {kind,r,c});
 }
 
@@ -144,7 +160,8 @@ function enterRoom(id, creating) {
   if (!key) { key = crypto.randomUUID(); localStorage.setItem(storage,key); }
   room = {id,key,ready:false,initial:creating ? 'create' : 'join'};
   location.hash = 'room=' + id;
-  $('createRoom').hidden = $('restart').hidden = true;
+  $('createRoom').hidden = $('restart').hidden = $('opponent').hidden = true;
+  cpu = '';
   $('roomTools').hidden = false;
   $('invite').value = location.href;
   $('roomStatus').textContent = '対戦ルームに接続中…';
