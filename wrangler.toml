@@ -1,0 +1,8 @@
+name = "ayaji-quoridor"
+pages_build_output_dir = "./public"
+compatibility_date = "2025-06-01"
+
+[[d1_databases]]
+binding = "ROOMS"
+database_name = "ayaji-rooms"
+database_id = "082534bb-994d-4f1b-b4ec-950aadd3b982"

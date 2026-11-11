@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {start,targets,move,wall} = require('../rules');
+const {start,targets,move,wall} = require('../public/rules');
 
 test('opening, illegal moves and alternating turns', () => {
   const s = start();

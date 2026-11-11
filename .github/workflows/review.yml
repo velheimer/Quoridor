@@ -16,7 +16,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: node --check app.js && node --test tests/*.test.js
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --check public/app.js && node --test tests/*.test.js
 
   open-pr:
     needs: test
