@@ -1,0 +1,62 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const {DatabaseSync} = require('node:sqlite');
+
+// Minimal D1 stand-in backed by an in-memory SQLite database.
+function fakeD1() {
+  const sql = new DatabaseSync(':memory:');
+  const statement = (query, args = []) => ({
+    bind: (...values) => statement(query, values),
+    run: async () => ({meta: {changes: Number(sql.prepare(query).run(...args).changes)}}),
+    first: async () => sql.prepare(query).get(...args) ?? null
+  });
+  return {prepare: query => statement(query), batch: async list => { for (const s of list) await s.run(); }};
+}
+
+async function server() {
+  const {onRequestPost} = await import('../functions/api/room.js');
+  const ROOMS = fakeD1(), id = crypto.randomUUID();
+  return async (key, action, fields = {}) => {
+    const request = new Request('http://localhost/api/room', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id, key, action, ...fields})
+    });
+    const response = await onRequestPost({request, env: {ROOMS}});
+    return {status: response.status, ...await response.json()};
+  };
+}
+
+test('seats, turns and stale versions are enforced', async () => {
+  const call = await server(), host = crypto.randomUUID(), guest = crypto.randomUUID();
+  assert.equal((await call(guest, 'join')).status, 404);
+  assert.equal((await call(host, 'create')).seat, 0);
+  assert.equal((await call(host, 'play', {kind:'move', r:7, c:4, version:0})).status, 409);
+  assert.equal((await call(guest, 'join')).seat, 1);
+  assert.equal((await call(crypto.randomUUID(), 'join')).status, 403);
+  assert.equal((await call(guest, 'play', {kind:'move', r:1, c:4, version:0})).status, 409);
+  assert.equal((await call(host, 'play', {kind:'move', r:7, c:4, version:0})).version, 1);
+  assert.equal((await call(host, 'play', {kind:'move', r:6, c:4, version:0})).status, 409);
+  assert.equal((await call(guest, 'play', {kind:'x', r:0, c:0, version:1})).status, 422);
+  assert.deepEqual((await call(guest, 'play', {kind:'h', r:3, c:3, version:1})).game.stock, [10,9]);
+  assert.equal((await call(host, 'dance')).status, 400);
+});
+
+test('a finished game can be restarted by either player', async () => {
+  const call = await server(), host = crypto.randomUUID(), guest = crypto.randomUUID();
+  await call(host, 'create');
+  await call(guest, 'join');
+  assert.equal((await call(guest, 'restart', {version:0})).status, 422);
+  // 朱 walks straight up column 4 while 藍 steps aside and spends walls far away.
+  const guestTurns = [{kind:'move', r:0, c:3}, ...[[0,0],[2,0],[4,0],[6,0],[0,7],[2,7]].map(([r,c]) => ({kind:'v', r, c}))];
+  let version = 0;
+  for (let r = 7; r >= 0; r--) {
+    version = (await call(host, 'play', {kind:'move', r, c:4, version})).version;
+    if (r) version = (await call(guest, 'play', {...guestTurns[7 - r], version})).version;
+  }
+  const finished = await call(host, 'sync');
+  assert.equal(finished.game.winner, 0);
+  const restarted = await call(guest, 'restart', {version});
+  assert.equal(restarted.version, version + 1);
+  assert.deepEqual(restarted.game, {pieces:[[8,4],[0,4]], stock:[10,10], walls:[], turn:0, winner:null, moves:0});
+  assert.equal((await call(host, 'play', {kind:'move', r:7, c:4, version:version + 1})).status, 200);
+});

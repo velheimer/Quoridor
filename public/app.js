@@ -17,6 +17,7 @@ function render() {
   board.replaceChildren();
   $('status').textContent = over ? names[state.winner]+'の勝ち' : names[state.turn]+'の手番';
   $('count').textContent = over ? state.moves+' 手で終局' : '第 '+(state.moves+1)+' 手';
+  if (room) $('restart').hidden = !over || !room.ready;
   $('stock').innerHTML = names.map((n,i) => '<div class="stockrow"><span class="dot '+colors[i]+'"></span>'+n+'<b>'+state.stock[i]+' 枚</b></div>').join('');
   for (const btn of document.querySelectorAll('[data-mode]')) {
     btn.disabled = !canPlay() || over || (btn.dataset.mode !== 'move' && !state.stock[state.turn]);
@@ -63,9 +64,13 @@ function dialog(title,body,confirm) {
   $('dialog').showModal();
 }
 $('help').onclick = () => dialog('遊び方','<p>向かいの辺を目指します。朱が先手。先に向こう岸のどのマスにでも着いた方が勝ちです。</p><p>自分の手番では、駒を上下左右に1マス進めるか、長さ2マスの壁を1枚置きます。相手が隣なら飛び越えられます。相手の背後が壁か盤の端なら、相手の横に回り込めます。</p><p>壁は各自10枚。壁を重ねたり交差させたり、どちらかの道をすべて塞いだりすることはできません。</p>',false);
-$('restart').onclick = () => dialog('新しい対局','<p>現在の盤面をリセットして、朱の手番から始めます。</p>',true);
+$('restart').onclick = () => dialog('新しい対局', room ? '<p>盤面をリセットして、朱の手番から再戦します。相手の盤面も新しくなります。</p>' : '<p>現在の盤面をリセットして、朱の手番から始めます。</p>',true);
 $('close').onclick = () => $('dialog').close();
-$('confirm').onclick = () => {state=Ayaji.start(); mode='move'; $('dialog').close(); render();};
+$('confirm').onclick = () => {
+  $('dialog').close();
+  if (room) return sendRoom('restart');
+  state=Ayaji.start(); mode='move'; render();
+};
 render();
 
 async function requestRoom(action, fields = {}) {
@@ -82,8 +87,8 @@ async function requestRoom(action, fields = {}) {
 }
 
 function applyRoom(data) {
-  const changed = !room.synced || state.moves !== data.version || room.ready !== data.ready;
-  Object.assign(room, {seat: data.seat, ready: data.ready, synced: true});
+  const changed = !room.synced || room.version !== data.version || room.ready !== data.ready;
+  Object.assign(room, {seat: data.seat, ready: data.ready, version: data.version, synced: true});
   state = data.game;
   $('roomStatus').textContent = data.ready ? 'オンライン対戦 · あなたは' + names[data.seat]
     : '招待リンクを相手に送ってください。参加を待っています。';
@@ -109,16 +114,19 @@ async function syncRoom(action = 'sync') {
 
 async function play(kind, r, c) {
   if (!canPlay()) return;
-  if (!room) {
-    const legal = kind === 'move' ? Ayaji.move(state,r,c) : Ayaji.wall(state,r,c,kind);
-    if (legal) { mode = 'move'; render(); }
-    else $('hint').textContent = 'ここには置けません。壁とゴールへの道を確認してください。';
-    return;
-  }
+  // Online, try the move on a copy first; the server's answer replaces the state.
+  const trial = room ? structuredClone(state) : state;
+  const legal = kind === 'move' ? Ayaji.move(trial,r,c) : Ayaji.wall(trial,r,c,kind);
+  if (!legal) { $('hint').textContent = 'ここには置けません。壁とゴールへの道を確認してください。'; return; }
+  if (!room) { mode = 'move'; render(); return; }
+  await sendRoom('play', {kind,r,c});
+}
+
+async function sendRoom(action, fields = {}) {
   pending = true;
   render();
   try {
-    const data = await requestRoom('play', {kind,r,c,version:state.moves});
+    const data = await requestRoom(action, {...fields, version: room.version});
     pending = false;
     applyRoom(data);
   } catch (error) {
