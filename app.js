@@ -3,7 +3,7 @@ const names = ['朱','藍'];
 const colors = ['red','blue'];
 const pitch = 100/8.86, tile = pitch*.86;
 let state = Ayaji.start(), mode = 'move', undoStack = [], cpu = '';
-const who = i => names[i] + (cpu && i === 1 ? '（CPU）' : '');
+const who = i => names[i] + (cpu && i === 1 ? '（CPU）' : room?.names?.[i] ? '（' + room.names[i] + '）' : '');
 const cpuThinking = () => Boolean(cpu) && state.turn === 1 && state.winner === null;
 
 let room = null, pending = false, polling;
@@ -96,7 +96,7 @@ async function requestRoom(action, fields = {}) {
   const response = await fetch('/api/room', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: room.id, key: room.key, action, ...fields }),
+    body: JSON.stringify({ id: room.id, key: room.key, action, name: $('playerName').value.trim(), ...fields }),
     signal: AbortSignal.timeout(12000)
   });
   if (!response.headers.get('Content-Type')?.includes('application/json')) throw new Error('対戦サーバーに接続できません。');
@@ -106,10 +106,11 @@ async function requestRoom(action, fields = {}) {
 }
 
 function applyRoom(data) {
-  const changed = !room.synced || room.version !== data.version || room.ready !== data.ready;
-  Object.assign(room, {seat: data.seat, ready: data.ready, version: data.version, synced: true});
+  const changed = !room.synced || room.version !== data.version || room.ready !== data.ready || String(room.names) !== String(data.names);
+  Object.assign(room, {seat: data.seat, ready: data.ready, version: data.version, names: data.names, synced: true});
   state = data.game;
-  $('roomStatus').textContent = data.ready ? 'オンライン対戦 · あなたは' + names[data.seat]
+  const rival = 1 - data.seat, rivalName = data.names[rival] ? data.names[rival] + 'さん' : '相手';
+  $('roomStatus').textContent = data.ready ? rivalName + '（' + names[rival] + '）と対戦中 · あなたは' + names[data.seat]
     : '招待リンクを相手に送ってください。参加を待っています。';
   if (changed) { mode = 'move'; render(); }
 }
@@ -170,6 +171,8 @@ function enterRoom(id, creating) {
   polling = setInterval(() => { if (!document.hidden) syncRoom(room.initial); }, 2500);
 }
 
+$('playerName').value = localStorage.getItem('ayaji-name') || '';
+$('playerName').onchange = () => { localStorage.setItem('ayaji-name', $('playerName').value.trim()); if (room) syncRoom(); };
 $('createRoom').onclick = () => enterRoom(crypto.randomUUID(),true);
 $('leaveRoom').onclick = () => { history.replaceState(null, '', location.href.split('#')[0]); location.reload(); };
 $('copyInvite').onclick = async () => {

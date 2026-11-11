@@ -4,6 +4,8 @@
 #roomStatus:empty { display: none; }
 #roomTools:not([hidden]) { display: grid; gap: .4rem; }
 #invite { width: 100%; min-width: 0; font: inherit; }
+#nameField { display: grid; margin-bottom: .5rem; }
+#playerName { width: 100%; min-width: 0; font: inherit; }
 .headingActions { display: flex; gap: .5rem; }
 #undo:disabled { opacity: .45; cursor: default; }
 #opponent:not([hidden]) { display: grid; gap: .3rem; margin-bottom: 1rem; }

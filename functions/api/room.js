@@ -10,9 +10,14 @@ const respond = (data, status = 200) => Response.json(data, {
 const schemas = new WeakMap();
 function ensureSchema(db) {
   if (!schemas.has(db)) schemas.set(db, db.prepare('CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, host TEXT NOT NULL, guest TEXT, game TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, expires INTEGER NOT NULL)').run()
+    // Player names came later, so tables made before them need the columns added.
+    .then(() => Promise.all(['host_name', 'guest_name'].map(column => db.prepare(`ALTER TABLE rooms ADD COLUMN ${column} TEXT`).run()
+      .catch(error => { if (!/duplicate column/i.test(error.message)) throw error; }))))
     .catch(error => { schemas.delete(db); throw error; }));
   return schemas.get(db);
 }
+// Up to 12 characters without control characters; anything else counts as no name.
+const cleanName = name => typeof name === 'string' ? [...name.replace(/\p{C}/gu, '').trim()].slice(0, 12).join('') : '';
 
 export async function onRequestPost({ request, env }) {
   if (!request.headers.get('content-type')?.startsWith('application/json')) {
@@ -44,6 +49,11 @@ export async function onRequestPost({ request, env }) {
   if (!room) return respond({ error: '部屋が見つからないか、有効期限が切れています。' }, 404);
   const seat = room.host === key ? 0 : room.guest === key ? 1 : -1;
   if (seat < 0) return respond({ error: 'この部屋には既に2人が参加しています。' }, 403);
+  const name = cleanName(body.name), column = seat ? 'guest_name' : 'host_name';
+  if (name && name !== room[column]) {
+    await db.prepare(`UPDATE rooms SET ${column} = ? WHERE id = ?`).bind(name, id).run();
+    room[column] = name;
+  }
   let game = JSON.parse(room.game), version = room.version;
   if (action === 'play' || action === 'restart') {
     if (!room.guest || body.version !== room.version) {
@@ -63,5 +73,5 @@ export async function onRequestPost({ request, env }) {
     if (!result.meta.changes) return respond({ error: '盤面が変わりました。最新の状態に更新します。' }, 409);
     version++;
   }
-  return respond({ game, seat, ready: Boolean(room.guest), version });
+  return respond({ game, seat, ready: Boolean(room.guest), version, names: [room.host_name || '', room.guest_name || ''] });
 }

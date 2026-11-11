@@ -10,12 +10,12 @@ function fakeD1() {
     run: async () => ({meta: {changes: Number(sql.prepare(query).run(...args).changes)}}),
     first: async () => sql.prepare(query).get(...args) ?? null
   });
-  return {prepare: query => statement(query), batch: async list => { for (const s of list) await s.run(); }};
+  return {prepare: query => statement(query), batch: async list => { for (const s of list) await s.run(); }, exec: query => sql.exec(query)};
 }
 
-async function server() {
+async function server(ROOMS = fakeD1()) {
   const {onRequestPost} = await import('../functions/api/room.js');
-  const ROOMS = fakeD1(), id = crypto.randomUUID();
+  const id = crypto.randomUUID();
   return async (key, action, fields = {}) => {
     const request = new Request('http://localhost/api/room', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -59,4 +59,20 @@ test('a finished game can be restarted by either player', async () => {
   assert.equal(restarted.version, version + 1);
   assert.deepEqual(restarted.game, {pieces:[[8,4],[0,4]], stock:[10,10], walls:[], turn:0, winner:null, moves:0});
   assert.equal((await call(host, 'play', {kind:'move', r:7, c:4, version:version + 1})).status, 200);
+});
+
+test('players see each other\'s names', async () => {
+  const call = await server(), host = crypto.randomUUID(), guest = crypto.randomUUID();
+  assert.deepEqual((await call(host, 'create', {name: '  けいいち  '})).names, ['けいいち', '']);
+  assert.deepEqual((await call(guest, 'join', {name: 'あおい\u0007'})).names, ['けいいち', 'あおい']);
+  // A blank name keeps the stored one; a long name is cut to 12 characters.
+  assert.deepEqual((await call(host, 'sync', {name: ''})).names, ['けいいち', 'あおい']);
+  assert.deepEqual((await call(guest, 'sync', {name: '🍓'.repeat(20)})).names, ['けいいち', '🍓'.repeat(12)]);
+});
+
+test('rooms tables from before names get the new columns', async () => {
+  const ROOMS = fakeD1();
+  ROOMS.exec('CREATE TABLE rooms (id TEXT PRIMARY KEY, host TEXT NOT NULL, guest TEXT, game TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, expires INTEGER NOT NULL)');
+  const call = await server(ROOMS), host = crypto.randomUUID();
+  assert.deepEqual((await call(host, 'create', {name: '朱の人'})).names, ['朱の人', '']);
 });
