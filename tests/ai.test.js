@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const rules = require('../rules');
-const {choose} = require('../ai');
+const {choose} = rules.AI;
 
 const apply = (s,a) => a.kind === 'move' ? rules.move(s,a.r,a.c) : rules.wall(s,a.r,a.c,a.kind);
 
