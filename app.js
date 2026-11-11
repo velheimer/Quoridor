@@ -178,3 +178,5 @@ $('copyInvite').onclick = async () => {
 };
 const invitation = /^#room=([a-f0-9-]{36})$/.exec(location.hash);
 if (invitation) enterRoom(invitation[1],false);
+// Pasting an invite into an already open tab only changes the hash, so reload to join.
+addEventListener('hashchange', () => { if (!room || location.hash !== '#room=' + room.id) location.reload(); });
