@@ -1,4 +1,4 @@
-import rules from '../../public/rules.js';
+import rules from '../../rules.js';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const lifetime = 24 * 60 * 60 * 1000;
