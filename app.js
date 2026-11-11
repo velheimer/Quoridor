@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const names = ['朱','藍'];
 const colors = ['red','blue'];
 const pitch = 100/8.86, tile = pitch*.86;
-let state = Ayaji.start(), mode = 'move';
+let state = Ayaji.start(), mode = 'move', undoStack = [];
 
 let room = null, pending = false, polling;
 function canPlay() {
@@ -18,6 +18,8 @@ function render() {
   $('status').textContent = over ? names[state.winner]+'の勝ち' : names[state.turn]+'の手番';
   $('count').textContent = over ? state.moves+' 手で終局' : '第 '+(state.moves+1)+' 手';
   if (room) $('restart').hidden = !over || !room.ready;
+  $('undo').hidden = Boolean(room);
+  $('undo').disabled = !undoStack.length;
   $('stock').innerHTML = names.map((n,i) => '<div class="stockrow"><span class="dot '+colors[i]+'"></span>'+n+'<b>'+state.stock[i]+' 枚</b></div>').join('');
   for (const btn of document.querySelectorAll('[data-mode]')) {
     btn.disabled = !canPlay() || over || (btn.dataset.mode !== 'move' && !state.stock[state.turn]);
@@ -69,8 +71,9 @@ $('close').onclick = () => $('dialog').close();
 $('confirm').onclick = () => {
   $('dialog').close();
   if (room) return sendRoom('restart');
-  state=Ayaji.start(); mode='move'; render();
+  state=Ayaji.start(); undoStack=[]; mode='move'; render();
 };
+$('undo').onclick = () => { if (undoStack.length) { state = undoStack.pop(); mode = 'move'; render(); } };
 render();
 
 async function requestRoom(action, fields = {}) {
@@ -114,11 +117,11 @@ async function syncRoom(action = 'sync') {
 
 async function play(kind, r, c) {
   if (!canPlay()) return;
-  // Online, try the move on a copy first; the server's answer replaces the state.
-  const trial = room ? structuredClone(state) : state;
+  // Try the move on a copy first; offline it becomes the new state, online the server's answer does.
+  const trial = structuredClone(state);
   const legal = kind === 'move' ? Ayaji.move(trial,r,c) : Ayaji.wall(trial,r,c,kind);
   if (!legal) { $('hint').textContent = 'ここには置けません。壁とゴールへの道を確認してください。'; return; }
-  if (!room) { mode = 'move'; render(); return; }
+  if (!room) { undoStack.push(state); state = trial; mode = 'move'; render(); return; }
   await sendRoom('play', {kind,r,c});
 }
 
