@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node --check public/app.js && node --test tests/*.test.js
+      - run: node --check app.js && node --test tests/*.test.js
 
   open-pr:
     needs: test
