@@ -66,8 +66,10 @@ function dialog(title,body,confirm) {
   $('confirm').hidden = !confirm;
   $('close').textContent = confirm ? '続ける' : '閉じる';
   $('dialog').showModal();
+  // Opening would focus the button at the bottom; focus the title so long texts start at the top.
+  $('dialogTitle').focus();
 }
-$('help').onclick = () => dialog('遊び方','<p>向かいの辺を目指します。朱が先手。先に向こう岸のどのマスにでも着いた方が勝ちです。</p><p>自分の手番では、駒を上下左右に1マス進めるか、長さ2マスの壁を1枚置きます。相手が隣なら飛び越えられます。相手の背後が壁か盤の端なら、相手の横に回り込めます。</p><p>壁は各自10枚。壁を重ねたり交差させたり、どちらかの道をすべて塞いだりすることはできません。</p><p>「対戦相手」で CPU を選ぶと、あなたが朱（先手）、CPU が藍を持ちます。</p>',false);
+$('help').onclick = () => dialog('ルール',$('rulesText').innerHTML,false);
 $('restart').onclick = () => dialog('新しい対局', room ? '<p>盤面をリセットして、朱の手番から再戦します。相手の盤面も新しくなります。</p>' : '<p>現在の盤面をリセットして、朱の手番から始めます。</p>',true);
 $('close').onclick = () => $('dialog').close();
 $('confirm').onclick = () => {
