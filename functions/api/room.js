@@ -10,8 +10,8 @@ const respond = (data, status = 200) => Response.json(data, {
 const schemas = new WeakMap();
 function ensureSchema(db) {
   if (!schemas.has(db)) schemas.set(db, db.prepare('CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, host TEXT NOT NULL, guest TEXT, game TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, expires INTEGER NOT NULL)').run()
-    // Player names came later, so tables made before them need the columns added.
-    .then(() => Promise.all(['host_name', 'guest_name'].map(column => db.prepare(`ALTER TABLE rooms ADD COLUMN ${column} TEXT`).run()
+    // Names and last-seen times came later, so tables made before them need the columns added.
+    .then(() => Promise.all(['host_name TEXT', 'guest_name TEXT', 'host_seen INTEGER', 'guest_seen INTEGER'].map(column => db.prepare(`ALTER TABLE rooms ADD COLUMN ${column}`).run()
       .catch(error => { if (!/duplicate column/i.test(error.message)) throw error; }))))
     .catch(error => { schemas.delete(db); throw error; }));
   return schemas.get(db);
@@ -48,12 +48,11 @@ export async function onRequestPost({ request, env }) {
   const room = await db.prepare('SELECT * FROM rooms WHERE id = ? AND expires > ?').bind(id, now).first();
   if (!room) return respond({ error: '部屋が見つからないか、有効期限が切れています。' }, 404);
   const seat = room.host === key ? 0 : room.guest === key ? 1 : -1;
-  if (seat < 0) return respond({ error: 'この部屋には既に2人が参加しています。' }, 403);
-  const name = cleanName(body.name), column = seat ? 'guest_name' : 'host_name';
-  if (name && name !== room[column]) {
-    await db.prepare(`UPDATE rooms SET ${column} = ? WHERE id = ?`).bind(name, id).run();
-    room[column] = name;
-  }
+  if (seat < 0) return respond({ error: 'この部屋には既に2人が参加しています。招待リンクで入れるのは1人だけで、先に開いた端末が参加者になります。' }, 403);
+  // Every request shows the player is still connected; a blank name keeps the stored one.
+  const side = seat ? 'guest' : 'host', name = cleanName(body.name) || room[side + '_name'] || null;
+  await db.prepare(`UPDATE rooms SET ${side}_seen = ?, ${side}_name = ? WHERE id = ?`).bind(now, name, id).run();
+  Object.assign(room, { [side + '_seen']: now, [side + '_name']: name });
   let game = JSON.parse(room.game), version = room.version;
   if (action === 'play' || action === 'restart') {
     if (!room.guest || body.version !== room.version) {
@@ -73,5 +72,7 @@ export async function onRequestPost({ request, env }) {
     if (!result.meta.changes) return respond({ error: '盤面が変わりました。最新の状態に更新します。' }, 409);
     version++;
   }
-  return respond({ game, seat, ready: Boolean(room.guest), version, names: [room.host_name || '', room.guest_name || ''] });
+  // Seconds since each player last reached the server, or null if they never have.
+  const seen = [room.host_seen, room.guest_seen].map(time => time ? Math.round((now - time) / 1000) : null);
+  return respond({ game, seat, ready: Boolean(room.guest), version, names: [room.host_name || '', room.guest_name || ''], seen });
 }
