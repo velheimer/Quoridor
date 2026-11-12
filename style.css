@@ -5,6 +5,10 @@
 #roomTools:not([hidden]) { display: grid; gap: .4rem; }
 #invite { width: 100%; min-width: 0; font: inherit; }
 #nameField { display: grid; margin-bottom: .5rem; }
+#presence { list-style: none; margin: 0; padding: .6rem .8rem; border: 1px solid #d4cfc1; border-radius: 4px; font-size: 14px; display: grid; gap: .25rem; }
+#presence li { display: flex; align-items: center; gap: .5rem; }
+#presence .note { color: #625d51; }
+#presence .ok { color: #2d6a3e; }
 #playerName { width: 100%; min-width: 0; font: inherit; }
 .headingActions { display: flex; gap: .5rem; }
 #undo:disabled { opacity: .45; cursor: default; }

@@ -76,3 +76,12 @@ test('rooms tables from before names get the new columns', async () => {
   const call = await server(ROOMS), host = crypto.randomUUID();
   assert.deepEqual((await call(host, 'create', {name: '朱の人'})).names, ['朱の人', '']);
 });
+
+test('each player sees when the other last reached the server', async () => {
+  const call = await server(), host = crypto.randomUUID(), guest = crypto.randomUUID();
+  assert.deepEqual((await call(host, 'create')).seen, [0, null]);
+  assert.deepEqual((await call(guest, 'join')).seen, [0, 0]);
+  const full = await call(crypto.randomUUID(), 'join');
+  assert.equal(full.status, 403);
+  assert.match(full.error, /先に開いた端末/);
+});

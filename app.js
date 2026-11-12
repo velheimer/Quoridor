@@ -93,13 +93,17 @@ function cpuTurn() {
 render();
 
 async function requestRoom(action, fields = {}) {
-  const response = await fetch('/api/room', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: room.id, key: room.key, action, name: $('playerName').value.trim(), ...fields }),
-    signal: AbortSignal.timeout(12000)
-  });
-  if (!response.headers.get('Content-Type')?.includes('application/json')) throw new Error('対戦サーバーに接続できません。');
+  let response;
+  try {
+    response = await fetch('/api/room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: room.id, key: room.key, action, name: $('playerName').value.trim(), ...fields }),
+      signal: AbortSignal.timeout(12000)
+    });
+  } catch (error) { room.offline = true; showPresence(); throw error; }
+  if (!response.headers.get('Content-Type')?.includes('application/json')) { room.offline = true; showPresence(); throw new Error('対戦サーバーに接続できません。'); }
+  room.offline = false; room.lastReply = Date.now();
   const data = await response.json();
   if (!response.ok) throw Object.assign(new Error(data.error), {status: response.status});
   return data;
@@ -107,12 +111,37 @@ async function requestRoom(action, fields = {}) {
 
 function applyRoom(data) {
   const changed = !room.synced || room.version !== data.version || room.ready !== data.ready || String(room.names) !== String(data.names);
-  Object.assign(room, {seat: data.seat, ready: data.ready, version: data.version, names: data.names, synced: true});
+  Object.assign(room, {seat: data.seat, ready: data.ready, version: data.version, names: data.names, seen: data.seen, synced: true});
+  showPresence();
   state = data.game;
   const rival = 1 - data.seat, rivalName = data.names[rival] ? data.names[rival] + 'さん' : '相手';
   $('roomStatus').textContent = data.ready ? rivalName + '（' + names[rival] + '）と対戦中 · あなたは' + names[data.seat]
     : '招待リンクを相手に送ってください。参加を待っています。';
   if (changed) { mode = 'move'; render(); }
+}
+
+// Seats, who is connected, and how this browser's own connection is doing.
+function showPresence() {
+  const ago = s => s < 60 ? s + '秒前' : s < 3600 ? Math.floor(s/60) + '分前' : Math.floor(s/3600) + '時間前';
+  const line = (parts, cls = '') => { const li = document.createElement('li'); li.className = cls; li.append(...parts); return li; };
+  const count = room.full ? '2 / 2 人（満員のため入れません）' : room.seat === undefined || room.offline ? '確認中' : 1 + Number(room.ready) + ' / 2 人';
+  const rows = [line(['部屋 ' + room.id.slice(0,4) + ' · 参加 ' + count], 'note')];
+  if (room.seat !== undefined && !room.full) for (const i of [0,1]) {
+    const dot = document.createElement('span'), seen = room.seen?.[i];
+    dot.className = 'dot ' + colors[i];
+    const label = names[i] + (room.names?.[i] ? ' ' + room.names[i] : '') + (i === room.seat ? '（あなた）' : '');
+    const status = i === room.seat ? (room.offline ? '通信できません' : '接続中')
+      : room.offline ? '不明'
+      : i === 1 && !room.ready ? 'まだ参加していません'
+      : seen === null || seen === undefined ? '不明'
+      : seen <= 8 ? '接続中' : ago(seen) + 'から応答なし';
+    const b = document.createElement('b'); b.textContent = status; b.className = status === '接続中' ? 'ok' : '';
+    rows.push(line([dot, label + ' — ', b]));
+  }
+  const since = room.lastReply ? ago(Math.round((Date.now() - room.lastReply) / 1000)) : null;
+  rows.push(line([room.offline ? 'サーバーにつながりません。再試行しています' + (since ? '（最後の成功：' + since + '）' : '') + '。'
+    : since ? 'サーバーと通信できています（' + since + 'に確認）。' : 'サーバーに接続しています…'], 'note'));
+  $('presence').replaceChildren(...rows);
 }
 
 async function syncRoom(action = 'sync') {
@@ -127,6 +156,8 @@ async function syncRoom(action = 'sync') {
     $('roomStatus').textContent = error.status ? error.message : '通信を再試行しています…';
     room.synced = false;
     room.ready = false;
+    room.full = error.status === 403;
+    showPresence();
     render();
     if ([403,404].includes(error.status)) clearInterval(polling);
   } finally { pending = false; }
@@ -166,6 +197,7 @@ function enterRoom(id, creating) {
   $('roomTools').hidden = false;
   $('invite').value = location.href;
   $('roomStatus').textContent = '対戦ルームに接続中…';
+  showPresence();
   state = Ayaji.start(); mode = 'move'; render();
   syncRoom(room.initial);
   polling = setInterval(() => { if (!document.hidden) syncRoom(room.initial); }, 2500);
