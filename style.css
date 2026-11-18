@@ -20,3 +20,24 @@
 #undo:disabled { opacity: .45; cursor: default; }
 #opponent:not([hidden]) { display: grid; gap: .3rem; margin-bottom: 1rem; }
 #cpu { font: inherit; color: inherit; padding: 7px 10px; border: 1px solid #bfb8aa; border-radius: 4px; background: transparent; }
+.walls, .controls { border-top: 1px solid #d4cfc1; margin-top: 22px; padding-top: 22px; }
+
+/* スマホでは盤のすぐ下に手番・残りの壁・操作をまとめ、対戦設定はその下に回す */
+@media (max-width: 660px) {
+  .heading h1 { font-size: 34px; }
+  .heading h1 span { display: none; }
+  .headingActions button { padding: 6px 10px; font-size: 13px; white-space: nowrap; }
+  aside { display: flex; flex-direction: column; padding-top: 12px; }
+  .play { order: -1; display: grid; grid-template-columns: 1fr auto; column-gap: 16px; align-items: center; }
+  .play .turn > small, .play .controls > small, .play .walls > small { display: none; }
+  .turn { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  aside h2 { font-size: 22px; margin: 0; }
+  .walls { border: 0; margin: 0; padding: 0; }
+  #stock { display: flex; gap: 14px; font-size: 14px; }
+  .stockrow { margin: 0; gap: 5px; }
+  .stockrow b { margin-left: 2px; }
+  .controls { grid-column: 1 / -1; margin-top: 10px; padding-top: 0; border: 0; }
+  .actions { margin-top: 0; }
+  #hint { margin: 8px 0 0; }
+  .setup { border-top: 1px solid #d4cfc1; margin-top: 16px; padding-top: 16px; }
+}
