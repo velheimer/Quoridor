@@ -6,7 +6,8 @@ let state = Ayaji.start(), mode = 'move', undoStack = [], cpu = '';
 const who = i => names[i] + (cpu && i === 1 ? '（CPU）' : room?.names?.[i] ? '（' + room.names[i] + '）' : '');
 const cpuThinking = () => Boolean(cpu) && state.turn === 1 && state.winner === null;
 
-let room = null, pending = false, polling;
+// drawnWhilePending: the screen was drawn with the controls locked by a request and needs redrawing once it ends.
+let room = null, pending = false, drawnWhilePending = false, polling;
 function canPlay() {
   return room ? room.ready && room.seat === state.turn && !pending : !cpuThinking();
 }
@@ -16,6 +17,7 @@ function position(el,x,y,w,h) {
 }
 function render() {
   const board = $('board'), legal = Ayaji.targets(state), over = state.winner !== null;
+  drawnWhilePending = pending;
   board.replaceChildren();
   $('status').textContent = over ? who(state.winner)+'の勝ち' : who(state.turn)+'の手番';
   $('count').textContent = over ? state.moves+' 手で終局' : '第 '+(state.moves+1)+' 手';
@@ -162,7 +164,11 @@ async function syncRoom(action = 'sync') {
     showPresence();
     render();
     if ([403,404].includes(error.status)) clearInterval(polling);
-  } finally { pending = false; }
+  } finally {
+    pending = false;
+    // Switching wall direction during a background sync drew the controls locked; unlock them.
+    if (drawnWhilePending) render();
+  }
 }
 
 async function play(kind, r, c) {
